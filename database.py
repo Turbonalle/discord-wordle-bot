@@ -1,7 +1,8 @@
+import os
 import sqlite3
 from typing import Dict, Optional
 
-DB_PATH = "wordle.db"
+DB_PATH = os.getenv("DATABASE_PATH", "wordle.db")
 
 def get_connection():
 	return sqlite3.connect(DB_PATH)
