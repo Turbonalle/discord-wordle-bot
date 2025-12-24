@@ -19,14 +19,30 @@ client = discord.Client(intents=intents)
 
 #-----------------------------------------------------------------------------
 
+async def resolve_usernames(client, guild_id, user_ids):
+	guild = client.get_guild(guild_id)
+	usernames = {}
+
+	for uid in user_ids:
+		try:
+			member = await guild.fetch_member(int(uid))
+			usernames[uid] = member.display_name
+		except discord.NotFound:
+			usernames[uid] = "Unknown User"
+		except discord.Forbidden:
+			usernames[uid] = "Permission Error"
+		except discord.HTTPException:
+			usernames[uid] = "Lookup Failed"
+	
+	return usernames
+
+
 async def backfill_history(client):
 	channel = client.get_channel(WORDLE_CHANNEL_ID)
 	if channel is None:
 		print("Wordle channel not found")
 		return
 	
-	print("Backfilling Wordle history")
-
 	async for message in channel.history(limit=500):
 		if "Your group is on" not in message.content:
 			continue
@@ -41,8 +57,7 @@ async def backfill_history(client):
 				date=day,
 				guesses=result["guesses"]
 			)
-	
-	print("Backfill complete.")
+
 
 async def post_daily_stats(channel):
 	embed = discord.Embed(
@@ -50,10 +65,14 @@ async def post_daily_stats(channel):
         color=0x000000
     )
 
+	guild_id = channel.guild.id
+
     # Fetch players
 	with get_connection() as conn:
 		cur = conn.execute("SELECT DISTINCT discord_id FROM results")
 		user_ids = [row[0] for row in cur.fetchall()]
+	
+	usernames = await resolve_usernames(client, guild_id, user_ids)
 
 	players = []
 
@@ -85,7 +104,7 @@ async def post_daily_stats(channel):
             else "N/A"
         )
 
-		header = f"-----------------------\n{rank_emoji} <@{uid}>"
+		header = f"-----------------------\n{rank_emoji} {usernames[uid]}"
 
 		stats_line = (
             f"🎮 **Played:** {p['games_played']}\n"
@@ -109,19 +128,16 @@ async def post_daily_stats(channel):
 
 	await channel.send(embed=embed)
 
+
 #-----------------------------------------------------------------------------
 
 @client.event
 async def on_ready():
 	init_db()
 	await backfill_history(client)
-	print(f"Logged in as {client.user}")
 	channel = client.get_channel(WORDLE_CHANNEL_ID)
 	if channel is None:
-		print("Wordle channel not found. Cannot post stats.")
 		return
-
-	print("Posting leaderboard after backfill.")
 	await post_daily_stats(channel)
 	
 
@@ -147,5 +163,6 @@ async def on_message(message):
 		)
 	
 	await post_daily_stats(message.channel)
+
 
 client.run(TOKEN)
