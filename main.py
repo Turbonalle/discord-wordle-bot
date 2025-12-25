@@ -5,6 +5,7 @@ from datetime import date
 from parser import parse_wordle_group_message
 from stats import get_player_stats
 from database import insert_result, init_db, get_connection
+import webserver
 
 load_dotenv()
 
@@ -164,5 +165,5 @@ async def on_message(message):
 	
 	await post_daily_stats(message.channel)
 
-
+webserver.keep_alive()
 client.run(TOKEN)
